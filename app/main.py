@@ -3,19 +3,47 @@ import sys
 import re
 import datetime
 from time import gmtime, strftime
+import random
 import requests
 from bs4 import BeautifulSoup
 import uuid
-import imghdr
+# import imghdr
 from py_log import log
-import utils.u_images_types as Images_Types
-import utils.u_urls as Utils_Urls
+# from py_log_print import log
+import constant.c_user_agents as UserAgents
+import constant.c_image_types as ImageTypes
+import util.u_urls as UtilUrls
 
-FOLDER_IMAGES = 'data/images'
+
+FOLDER_IMAGES = 'data\\images'
+FILE_USER_AGENTS = 'assets\\user_agents.txt'
+
+# USER_AGENTS = UserAgents.UA
+USER_AGENTS = None
 
 count_success: int = 0
 urls_processed = []
 hostname = ''
+
+
+def ua_random():
+    global USER_AGENTS
+
+    # Read from file config
+    if USER_AGENTS is None:
+        log.info(f'read USER_AGENTS from file {FILE_USER_AGENTS} start')
+        script_dir = os.path.dirname(__file__)
+        file_path = os.path.join(script_dir, FILE_USER_AGENTS)
+        USER_AGENTS = open(file_path).read().splitlines()
+        log.info(f'read USER_AGENTS len: {len(USER_AGENTS)} end')
+
+    # Read from constant file .py
+    if USER_AGENTS is None:
+        log.info('read USER_AGENTS from constant')
+        USER_AGENTS = UserAgents.UA
+        log.info(f'read USER_AGENTS from constant len: {len(USER_AGENTS)} end')
+
+    return random.choice(USER_AGENTS)
 
 
 def gen_folder_by_web():
@@ -82,8 +110,9 @@ def download_image(url, folder):
         log.warning(f'concatenate with hostname -> {url}')
 
     try:
-        user_agent = Utils_Urls.ua_random()
+        user_agent = ua_random()
         headers = {'User-Agent': user_agent}
+
         log.info('headers: ' + str(headers))
         response = requests.get(url, headers=headers)
     except requests.exceptions.RequestException as e:
@@ -144,7 +173,7 @@ def download_image(url, folder):
         if len(url_last_str.split(".")) > 1:
             file_ext = '.' + url_last_str.split(".")[1]
             file_ext = file_ext.lower()
-            if file_ext in Images_Types.IMG_EXT:
+            if file_ext in ImageTypes.IMG_EXT:
                 file_name = os.path.basename(url_without_prams)
 
     """
@@ -188,15 +217,15 @@ def scrape_images_web(url):
 
     # Check url
     log.info(f"Input url: {url}")
-    url = Utils_Urls.concatenate_url(url)
+    url = UtilUrls.concatenate_url(url)
     log.info(f"After check url: {url}")
 
     # Get hostname full
-    hostname = Utils_Urls.get_hostname_full(url)
+    hostname = UtilUrls.get_hostname_full(url)
     log.info(f"hostname: {hostname}")
 
     # Define HTTP Headers
-    user_agent = Utils_Urls.ua_random()
+    user_agent = ua_random()
     headers = {'User-Agent': user_agent}
 
     # Extract image links
@@ -222,7 +251,7 @@ def scrape_images_web(url):
     # End
     time_end = datetime.datetime.now()
     log.info(
-        f"End scape images url: {url} ~ time: " + str(time_end - time_start))
+        f"End scrape images url: {url} ~ time: " + str(time_end - time_start))
 
 
 if __name__ == "__main__":
