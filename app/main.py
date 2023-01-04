@@ -22,8 +22,8 @@ FILE_USER_AGENTS = 'assets\\user_agents.txt'
 USER_AGENTS = None
 
 count_success: int = 0
-urls_processed = []
 hostname = ''
+image_names = []
 
 
 def ua_random():
@@ -55,6 +55,18 @@ def gen_folder_by_web():
     return path
 
 
+def gen_new_name(file_name_full, arr):
+    """
+    Check if exist file name, so generate new file name
+    """
+    idx = 0
+    filename, file_extension = os.path.splitext(file_name_full)
+    while file_name_full in arr:
+        idx += 1
+        file_name_full = filename + '(' + str(idx) + ')' + file_extension
+    return file_name_full
+
+
 def extract_image_links(url, headers):
     log.info(f"request url: {url}")
     log.info(f"request headers: {headers}")
@@ -81,7 +93,11 @@ def extract_image_links(url, headers):
             # Extract 'src' attribute of every image
             image_links = []
             for image in images:
-                image_links.append(image.attrs['src'])
+                _url = image.attrs['src']
+                if _url not in image_links:
+                    image_links.append(_url)
+                else:
+                    log.warning(f'{_url} already exist')
             return image_links
         else:
             log.warning(f"request url: {url}, response code: {r.status_code}")
@@ -93,21 +109,16 @@ def download_image(url, folder):
     log.info(f"start url: {url}")
 
     global count_success
-    global urls_processed
     global hostname
-
-    """
-    Check processed url
-    """
-    if (url in urls_processed):
-        log.warning(f"url: {url} has processed")
-        return None
-    urls_processed.append(url)
+    global image_names
 
     # Validate url image
     if not url.startswith('http:') and not url.startswith('https:'):
-        url = hostname + url
-        log.warning(f'concatenate with hostname -> {url}')
+        if url.startswith('/'):
+            url = hostname + url
+        else:
+            url = hostname + '/' + url
+        log.info(f'concatenate with hostname -> {url}')
 
     try:
         user_agent = ua_random()
@@ -193,6 +204,12 @@ def download_image(url, folder):
         file_name = 'image_{0}{1}'.format(
             strftime("%Y%m%d_%H_%M_%S", gmtime()), '.' + str(extension))
 
+    # Check exist image name
+    if file_name in image_names:
+        file_name = gen_new_name(file_name, image_names)
+        log.warning(f'generate new file name {file_name} of {url}')
+    image_names.append(file_name)
+
     # Save image
     with open(folder + '/' + file_name, 'wb+') as wobj:
         wobj.write(response.content)
@@ -202,18 +219,26 @@ def download_image(url, folder):
     return file_name
 
 
+def clear():
+    global count_success
+    global hostname
+    global image_names
+
+    count_success = 0
+    hostname = ''
+    image_names = []
+
+
 def scrape_images_web(url):
     global count_success
     global hostname
 
+    # Clear global variables before start
+    clear()
+
     # Start
     log.info(f"Start scrape images url: {url}")
     time_start = datetime.datetime.now()
-
-    # # Validate input url
-    # if not is_url(url):
-    #     log.error(f"input: {url} is not URL")
-    #     exit(1)
 
     # Check url
     log.info(f"Input url: {url}")
@@ -239,19 +264,22 @@ def scrape_images_web(url):
     folder = gen_folder_by_web()
     log.info(f"generate folder: {folder}")
 
-    # Save url scrape
+    # Save all urls (scrape link and image links) scrape
+    _urls = url
+    for image_link in image_links:
+        _urls += '\n' + image_link
     with open(folder + '/url.txt', 'w') as wobj:
-        wobj.write(url)
+        wobj.write(_urls)
 
     # Download image by links
-    count_success = 0
     [download_image(url, folder) for url in image_links]
-    log.info(f"Success save images: {count_success}")
 
     # End
     time_end = datetime.datetime.now()
     log.info(
-        f"End scrape images url: {url} ~ time: " + str(time_end - time_start))
+        f"Success save images: {count_success} ~ time: " + str(time_end - time_start))
+    log.info(f"End scrape images url: {url}")
+    log.info('====================================================')
 
 
 if __name__ == "__main__":
