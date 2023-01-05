@@ -6,6 +6,7 @@ from time import gmtime, strftime
 import random
 import requests
 from bs4 import BeautifulSoup
+import cssutils
 import uuid
 # import imghdr
 from py_log import log
@@ -67,6 +68,16 @@ def gen_new_name(file_name_full, arr):
     return file_name_full
 
 
+def concatenate_image_link(url):
+    if not url.startswith('http:') and not url.startswith('https:'):
+        if url.startswith('/'):
+            url = hostname + url
+        else:
+            url = hostname + '/' + url
+        log.info(f'concatenate with hostname -> {url}')
+    return url
+
+
 def extract_image_links(url, headers):
     log.info(f"request url: {url}")
     log.info(f"request headers: {headers}")
@@ -87,17 +98,33 @@ def extract_image_links(url, headers):
             # Parse the HTML content of the webpage
             soup = BeautifulSoup(r.content, 'html.parser')
 
+            image_links = set()
+
+            """
+            Find tag `img`
+            """
             # Find all of the image tags:
             images = soup.findAll('img')
 
             # Extract 'src' attribute of every image
-            image_links = []
             for image in images:
                 _url = image.attrs['src']
-                if _url not in image_links:
-                    image_links.append(_url)
-                else:
-                    log.warning(f'{_url} already exist')
+                image_links.add(concatenate_image_link(_url))
+
+            """
+            Find style `background-image`
+            """
+            arr_div_style = soup.find_all(
+                lambda tag: tag.name == "div" and 'style' in tag.attrs)
+
+            for div_style in arr_div_style:
+                style = cssutils.parseStyle(div_style['style'])
+                _url = style['background-image']
+                _url = _url.replace('url(', '').replace(')', '')
+                if _url != '':
+                    log.info(f'background-image: {_url}')
+                    image_links.add(concatenate_image_link(_url))
+
             return image_links
         else:
             log.warning(f"request url: {url}, response code: {r.status_code}")
@@ -113,12 +140,12 @@ def download_image(url, folder):
     global image_names
 
     # Validate url image
-    if not url.startswith('http:') and not url.startswith('https:'):
-        if url.startswith('/'):
-            url = hostname + url
-        else:
-            url = hostname + '/' + url
-        log.info(f'concatenate with hostname -> {url}')
+    # if not url.startswith('http:') and not url.startswith('https:'):
+    #     if url.startswith('/'):
+    #         url = hostname + url
+    #     else:
+    #         url = hostname + '/' + url
+    #     log.info(f'concatenate with hostname -> {url}')
 
     try:
         user_agent = ua_random()
@@ -279,7 +306,7 @@ def scrape_images_web(url):
     log.info(
         f"Success save images: {count_success} ~ time: " + str(time_end - time_start))
     log.info(f"End scrape images url: {url}")
-    log.info('====================================================')
+    log.info('<<<====================================================>>>')
 
 
 if __name__ == "__main__":

@@ -8,8 +8,9 @@ Use the package manager [pip](https://pip.pypa.io/en/stable/) to install needed 
 
 ```bash
 pip install requests
-pip install bs4
 pip install fake_useragent
+pip install bs4
+pip install cssutils
 pip install tk
 ```
 
