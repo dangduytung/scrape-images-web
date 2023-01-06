@@ -16,7 +16,7 @@ EXT_PNG = ['.png']
 MIMETYPE_PNG = 'image/png'
 
 EXT_SVG = ['.svg']
-MIMETYPE_SVG = 'image/svg'
+MIMETYPE_SVG = 'image/svg+xml'
 
 EXT_WEBP = ['.webp']
 MIMETYPE_WEBP = 'image/webp'

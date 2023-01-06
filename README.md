@@ -1,6 +1,10 @@
 # Scrape Images Web
 
-Scrape all images from input URL web
+Scrape all images from input URL web using `BeautifulSoup`.
+
+## * Note
+
+With modern web generate html by `javascript`, so to scrape data need other library like `selenium`
 
 ## Installation
 
@@ -12,6 +16,17 @@ pip install fake_useragent
 pip install bs4
 pip install cssutils
 pip install tk
+pip install python-datauri
+```
+Use library [python-datauri](https://pypi.org/project/python-datauri) to parse tag `img` use `dataURI` to display image on html
+
+### Futher
+
+Use library [python-magic](https://pypi.org/project/python-magic) to identifies file types
+
+```bash
+pip install python-magic-bin
+pip install python-magic
 ```
 
 ## Console

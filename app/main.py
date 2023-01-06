@@ -9,11 +9,14 @@ from bs4 import BeautifulSoup
 import cssutils
 import uuid
 # import imghdr
+from datauri import DataURI
 from py_log import log
 # from py_log_print import log
 import constant.c_user_agents as UserAgents
 import constant.c_image_types as ImageTypes
 import util.u_urls as UtilUrls
+import util.u_files as UtilFiles
+import util.u_images as UtilImages
 
 
 FOLDER_IMAGES = 'data\\images'
@@ -25,6 +28,19 @@ USER_AGENTS = None
 count_success: int = 0
 hostname = ''
 image_names = []
+folder_image = ''  # folder contain images by once download
+
+
+def clear():
+    global count_success
+    global hostname
+    global image_names
+    global folder_image
+
+    count_success = 0
+    hostname = ''
+    image_names = []
+    folder_image = ''
 
 
 def ua_random():
@@ -56,19 +72,16 @@ def gen_folder_by_web():
     return path
 
 
-def gen_new_name(file_name_full, arr):
-    """
-    Check if exist file name, so generate new file name
-    """
-    idx = 0
-    filename, file_extension = os.path.splitext(file_name_full)
-    while file_name_full in arr:
-        idx += 1
-        file_name_full = filename + '(' + str(idx) + ')' + file_extension
-    return file_name_full
-
-
 def concatenate_image_link(url):
+    # If url is dataURI (https://en.wikipedia.org/wiki/Data_URI_scheme)
+    if url.startswith('data:'):
+        return url
+
+    # If url is like //product.cdn/image
+    if url.startswith('//'):
+        return 'http:' + url
+
+    # Full URL or not
     if not url.startswith('http:') and not url.startswith('https:'):
         if url.startswith('/'):
             url = hostname + url
@@ -78,7 +91,7 @@ def concatenate_image_link(url):
     return url
 
 
-def extract_image_links(url, headers):
+def extract_image_sources(url, headers):
     log.info(f"request url: {url}")
     log.info(f"request headers: {headers}")
     try:
@@ -132,20 +145,68 @@ def extract_image_links(url, headers):
         log.error(f"Error: {e}")
 
 
-def download_image(url, folder):
-    log.info(f"start url: {url}")
+def save_image(source):
+    """
+    Save image by URL, dataURI
+    """
+    global count_success
+
+    log.info(f"start source: {source}")
+
+    file_name = None
+
+    # Decode or download image
+    if source.startswith('data:'):
+        file_name = decode_image_data_uri(source)
+    else:
+        file_name = download_image(source)
+
+    # Count and log
+    if file_name is not None:
+        count_success += 1
+        log.info(f"success save image: {file_name}, count: {count_success}")
+    else:
+        log.warning(f"can not save image of source: {source}")
+    return file_name
+
+
+def decode_image_data_uri(data):
+    """
+    Decode image dataURI
+    """
+    log.info(f"data URI: {data}")
+
+    try:
+        uri = DataURI(data)
+    except Exception as e:
+        log.error(f'Error: {e}')
+        return None
+
+    mimetype = uri.mimetype
+    extension = UtilImages.get_extension(mimetype)
+    file_name = uuid.uuid4().hex + extension
+    path = folder_image + '/' + file_name
+
+    # Write file
+    if isinstance(uri.data, str):
+        UtilFiles.write_text(uri.data, path)
+    elif isinstance(uri.data, bytes):
+        UtilFiles.write_bytes(uri.data, path)
+    else:
+        log.warning(f"type(uri.data): {type(uri.data)}")
+    return file_name
+
+
+def download_image(url):
+    """
+    Download image by URL
+    """
 
     global count_success
     global hostname
     global image_names
 
-    # Validate url image
-    # if not url.startswith('http:') and not url.startswith('https:'):
-    #     if url.startswith('/'):
-    #         url = hostname + url
-    #     else:
-    #         url = hostname + '/' + url
-    #     log.info(f'concatenate with hostname -> {url}')
+    log.info(f"start url: {url}")
 
     try:
         user_agent = ua_random()
@@ -233,32 +294,22 @@ def download_image(url, folder):
 
     # Check exist image name
     if file_name in image_names:
-        file_name = gen_new_name(file_name, image_names)
+        file_name = UtilFiles.check_file_name(file_name, image_names)
         log.warning(f'generate new file name {file_name} of {url}')
     image_names.append(file_name)
 
     # Save image
-    with open(folder + '/' + file_name, 'wb+') as wobj:
-        wobj.write(response.content)
-    count_success += 1
-    log.info(f"success save image: {file_name}, count: {count_success}")
+    UtilFiles.write_bytes(response.content, folder_image + '/' + file_name)
+
+    log.info(f"end file_name: {file_name}")
 
     return file_name
-
-
-def clear():
-    global count_success
-    global hostname
-    global image_names
-
-    count_success = 0
-    hostname = ''
-    image_names = []
 
 
 def scrape_images_web(url):
     global count_success
     global hostname
+    global folder_image
 
     # Clear global variables before start
     clear()
@@ -281,25 +332,24 @@ def scrape_images_web(url):
     headers = {'User-Agent': user_agent}
 
     # Extract image links
-    image_links = extract_image_links(url, headers)
-    if not image_links:
+    image_sources = extract_image_sources(url, headers)
+    if not image_sources:
         log.warning(f"No images at url: {url}")
         exit(1)
-    log.info("image_links: " + str(len(image_links)) + " ~ " + str(image_links))
+    log.info("image_sources: " + str(len(image_sources)) + " ~ " + str(image_sources))
 
     # Generate folder save images
-    folder = gen_folder_by_web()
-    log.info(f"generate folder: {folder}")
+    folder_image = gen_folder_by_web()
+    log.info(f"generate folder: {folder_image}")
 
-    # Save all urls (scrape link and image links) scrape
-    _urls = url
-    for image_link in image_links:
-        _urls += '\n' + image_link
-    with open(folder + '/url.txt', 'w') as wobj:
-        wobj.write(_urls)
+    # Save all urls (scrape root link and image links)
+    _data = url
+    for image_source in image_sources:
+        _data += '\n' + image_source
+    UtilFiles.write_text(_data, folder_image + '/url.txt')
 
-    # Download image by links
-    [download_image(url, folder) for url in image_links]
+    # Save images (include dataURI, URL)
+    [save_image(source) for source in image_sources]
 
     # End
     time_end = datetime.datetime.now()
